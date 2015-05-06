@@ -1,8 +1,13 @@
 package drake.util;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -12,35 +17,61 @@ import lcm.lcm.LCM;
 import org.junit.Test;
 
 public class BlockingMessageMonitorTest {
+  
+  private static boolean DEBUG = false;
 
   @Test
   public void test() throws IOException {
-    ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
-    int publish_period_millis = 100;
-    String channel = "TEST_CHANNEL";
-    scheduler.scheduleAtFixedRate(new MessagePublisherTestTask(channel), 0, publish_period_millis, TimeUnit.MILLISECONDS);
+    List<String> channels = new ArrayList<>();
+    Map<String, Long> publish_periods_millis = new HashMap<String, Long>();
+    int num_channels = 5;
+    for (int i = 0; i < num_channels; i++) {
+      String channel = "TEST_CHANNEL_" + i;
+      channels.add(channel);
+      publish_periods_millis.put(channel, (i + 1) * 10l);
+    }
+
+    ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(num_channels);
+    for (String channel : channels) {
+      scheduler.scheduleAtFixedRate(new MessagePublisherTestTask(channel), 0, publish_periods_millis.get(channel), TimeUnit.MILLISECONDS);
+    }
 
     BlockingMessageMonitor monitor = new BlockingMessageMonitor();
-    LCM.getSingleton().subscribe(channel, monitor);
-    long last_time_stamp = -1;
-    int num_messages = 20;
-    for (int i = 0; i < num_messages; i++) {
-      byte[] byte_array = monitor.getMessage();
-      if (byte_array != null) {
-        drake.lcmt_body_wrench_data msg;
-        try {
-          msg = new drake.lcmt_body_wrench_data(byte_array);
-          if (last_time_stamp > 0) {
-            long difference_nanos = msg.timestamp - last_time_stamp;
-            double difference_millis = difference_nanos / 1e6;
-            assertTrue(msg.timestamp >= last_time_stamp);
-            assertEquals(publish_period_millis, difference_millis, 20.0);
-            System.out.println("difference: " + difference_millis + " ms");
+    for (String channel : channels) {
+      LCM.getSingleton().subscribe(channel, monitor);
+    }
+
+    Map<String, Long> last_timestamps = new HashMap<String, Long>();
+    for (String channel : channels) {
+      last_timestamps.put(channel, -1l);
+    }
+
+    int num_polls = 2000;
+    for (int i = 0; i < num_polls; i++) {
+      Map<String, byte[]> byte_arrays = monitor.getMessages(1000l);
+      if (byte_arrays != null) {
+        if (DEBUG)
+          System.out.println("num new messages: " + byte_arrays.size());
+        for (String channel : channels) {
+          byte[] byte_array = byte_arrays.get(channel);
+          if (byte_array != null) {
+            drake.lcmt_body_wrench_data msg = new drake.lcmt_body_wrench_data(byte_array);
+            long last_timestamp = last_timestamps.get(channel);
+            if (last_timestamp > 0) {
+              if (DEBUG)
+                System.out.println("msg.timestamp: " + msg.timestamp + ", last_timestamp: " + last_timestamp);
+              assertTrue(msg.timestamp > last_timestamp);
+              long difference_nanos = msg.timestamp - last_timestamp;
+              double difference_millis = difference_nanos / 1e6;
+              assertEquals(publish_periods_millis.get(channel), difference_millis, 10.0);
+              if (DEBUG)
+                System.out.println("timestamp difference: " + difference_millis + " ms");
+            }
+            last_timestamps.put(channel, msg.timestamp);
           }
-          last_time_stamp = msg.timestamp;
-        } catch (IOException e) {
-          e.printStackTrace();
         }
+        if (DEBUG)
+          System.out.println();
       }
     }
   }
