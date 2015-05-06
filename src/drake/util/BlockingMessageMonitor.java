@@ -19,7 +19,7 @@ import lcm.lcm.LCMSubscriber;
 public class BlockingMessageMonitor implements LCMSubscriber {
   private final Map<String, byte[]> byte_arrays;
   private final Lock lock = new ReentrantLock();
-  private final List<String> channels_with_new_data_avalailable = new ArrayList<>();
+  private final List<String> channels_with_new_data_avalailable = new ArrayList<String>();
   private final Condition new_data = lock.newCondition();
 
   public BlockingMessageMonitor() {

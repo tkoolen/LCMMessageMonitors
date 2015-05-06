@@ -22,7 +22,7 @@ public class BlockingMessageMonitorTest {
 
   @Test
   public void test() throws IOException {
-    List<String> channels = new ArrayList<>();
+    List<String> channels = new ArrayList<String>();
     Map<String, Long> publish_periods_millis = new HashMap<String, Long>();
     int num_channels = 5;
     for (int i = 0; i < num_channels; i++) {
