@@ -9,6 +9,7 @@ import lcm.lcm.LCMSubscriber;
 public class LockFreeMessageMonitor implements LCMSubscriber {
 
   ConcurrentCopier<LCMMessageData> copier;
+  LCMMessageData last_returned_data = null;
   
   public LockFreeMessageMonitor() {
     copier = new ConcurrentCopier<LCMMessageData>(new LCMMessageDataBuilder());
@@ -32,10 +33,12 @@ public class LockFreeMessageMonitor implements LCMSubscriber {
 
   public byte[] getMessage() {
     LCMMessageData data = copier.getCopyForReading();
-    if (data == null)
-      return null; // could also return null if copy for reading has already been returned once (just add a private 'last_data_copied' field to compare against)
-    else
+    if (data == null || data == last_returned_data)
+      return null;
+    else {
+      last_returned_data = data;
       return data.byte_array;
+    }
   }
 
   private static class LCMMessageData {

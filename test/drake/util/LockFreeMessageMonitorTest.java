@@ -1,5 +1,6 @@
 package drake.util;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -16,9 +17,12 @@ public class LockFreeMessageMonitorTest {
   private static class LockFreeMessageReceiverTestTask implements Runnable {
     private final LockFreeMessageMonitor monitor = new LockFreeMessageMonitor();
     private long last_time_stamp = -1;
-    
-    public LockFreeMessageReceiverTestTask(String channel) throws IOException {
+    private double difference_millis_check;
+    private int messages_received = 0;
+
+    public LockFreeMessageReceiverTestTask(String channel, double difference_millis_check) throws IOException {
       LCM.getSingleton().subscribe(channel, monitor);
+      this.difference_millis_check = difference_millis_check;
     }
 
     @Override
@@ -31,28 +35,53 @@ public class LockFreeMessageMonitorTest {
           if (last_time_stamp > 0) {
             long difference_nanos = msg.timestamp - last_time_stamp;
             double difference_millis = difference_nanos / 1e6;
-            assertTrue(msg.timestamp >= last_time_stamp);
-            // assertEquals(difference_millis, period, 20.0);
-            System.out.println("difference: " + difference_millis + " ms");
+            // System.out.println("difference: " + difference_millis + " ms");
+            assertTrue(msg.timestamp > last_time_stamp);
+            if (!Double.isNaN(difference_millis_check) && messages_received > 0) {
+              double tol_millis = 10;
+              assertEquals(difference_millis, difference_millis_check, tol_millis);
+            }
           }
           last_time_stamp = msg.timestamp;
+          messages_received++;
         } catch (IOException e) {
           e.printStackTrace();
         }
       }
     }
+
+    public int getMessagesReceived() {
+      return messages_received;
+    }
   }
 
   @Test
-  public void test() throws InterruptedException, IOException {
-    ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
-    int publish_period_millis = 1;
-    int poll_period_millis = 30;
+  public void testPollFasterThanPublish() throws InterruptedException, IOException {
+    long publish_period_millis = 100;
+    long poll_period_millis = 1;
+    long test_duration_millis = 5 * 1000;
+    runTest(publish_period_millis, poll_period_millis, test_duration_millis);
+  }
+
+  @Test
+  public void testPublishFasterThanPoll() throws InterruptedException, IOException {
+    long publish_period_millis = 1;
+    long poll_period_millis = 100;
+    long test_duration_millis = 5 * 1000;
+    runTest(publish_period_millis, poll_period_millis, test_duration_millis);
+  }
+
+  private void runTest(long publish_period_millis, long poll_period_millis, long test_duration_millis) throws IOException, InterruptedException {
+    ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     String channel = "TEST_CHANNEL";
     scheduler.scheduleAtFixedRate(new MessagePublisherTestTask(channel), 0, publish_period_millis, TimeUnit.MILLISECONDS);
-    scheduler.scheduleAtFixedRate(new LockFreeMessageReceiverTestTask(channel), 0, poll_period_millis, TimeUnit.MILLISECONDS);
-
-    long test_duration_millis = 5 * 1000;
-    Thread.sleep(test_duration_millis);
+    long num_iterations = test_duration_millis / poll_period_millis;
+    double difference_millis_check = poll_period_millis > publish_period_millis ? poll_period_millis : Double.NaN;
+    LockFreeMessageReceiverTestTask receiver_task = new LockFreeMessageReceiverTestTask(channel, difference_millis_check);
+    for (int i = 0; i < num_iterations; i++) {
+      receiver_task.run();
+      Thread.sleep(poll_period_millis);
+    }
+    System.out.println("messages received: " + receiver_task.getMessagesReceived());
   }
 }
