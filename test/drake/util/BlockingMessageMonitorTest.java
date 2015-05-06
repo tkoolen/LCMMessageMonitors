@@ -58,8 +58,6 @@ public class BlockingMessageMonitorTest {
             drake.lcmt_body_wrench_data msg = new drake.lcmt_body_wrench_data(byte_array);
             long last_timestamp = last_timestamps.get(channel);
             if (last_timestamp > 0) {
-              if (DEBUG)
-                System.out.println("msg.timestamp: " + msg.timestamp + ", last_timestamp: " + last_timestamp);
               assertTrue(msg.timestamp > last_timestamp);
               long difference_nanos = msg.timestamp - last_timestamp;
               double difference_millis = difference_nanos / 1e6;
