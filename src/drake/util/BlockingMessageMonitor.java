@@ -12,8 +12,8 @@ import lcm.lcm.LCMSubscriber;
 public class BlockingMessageMonitor implements LCMSubscriber {
   private boolean new_data_available = false;
   private byte[] byte_array;
-  final Lock lock = new ReentrantLock();
-  final Condition new_data = lock.newCondition();
+  private final Lock lock = new ReentrantLock();
+  private final Condition new_data = lock.newCondition();
 
   public BlockingMessageMonitor() {
   }
@@ -50,7 +50,6 @@ public class BlockingMessageMonitor implements LCMSubscriber {
       new_data_available = false;
       return byte_array;
     } catch (InterruptedException e) {
-      // TODO Auto-generated catch block
       e.printStackTrace();
     } finally {
       lock.unlock();
