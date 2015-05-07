@@ -73,4 +73,15 @@ public class BlockingMessageMonitorTest {
       }
     }
   }
+  
+  @Test
+  public void testTimeout() {
+    BlockingMessageMonitor monitor = new BlockingMessageMonitor();
+    long timeout_millis = 1000l;
+    long start_time_nanos = System.nanoTime();
+    monitor.getMessages(timeout_millis);
+    long elapsed_time_nanos = System.nanoTime() - start_time_nanos;
+    long elapsed_time_millis = TimeUnit.MILLISECONDS.convert(elapsed_time_nanos, TimeUnit.NANOSECONDS);
+    assertEquals((double) timeout_millis, (double) elapsed_time_millis, 20.0);
+  }
 }
